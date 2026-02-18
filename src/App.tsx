@@ -1,116 +1,212 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import styled from "styled-components"
 import { ShoppingItem as ItemType } from "./types"
 import ShoppingItem from "./components/ShoppingItem"
+
+const STORAGE_KEY = "shoppingItems"
 
 const App: React.FC = () => {
   const [items, setItems] = useState<ItemType[]>([])
   const [input, setInput] = useState("")
 
+  // Load
   useEffect(() => {
-    const saved = localStorage.getItem("shoppingItems")
-    if (saved) {
-      setItems(JSON.parse(saved))
-    }
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) setItems(JSON.parse(saved))
   }, [])
 
+  // Save
   useEffect(() => {
-    localStorage.setItem("shoppingItems", JSON.stringify(items))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
   }, [items])
 
-  const handleAdd = () => {
-    if (input.trim() === "") return
+  const stats = useMemo(() => {
+    const total = items.length
+    const done = items.filter(i => i.bought).length
+    return { total, done, left: total - done }
+  }, [items])
+
+  const handleAdd = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    const text = input.trim()
+    if (!text) return
+
     const newItem: ItemType = {
       id: crypto.randomUUID(),
-      text: input,
+      text,
       bought: false,
     }
-    setItems([newItem, ...items])
+
+    setItems(prev => [newItem, ...prev])
     setInput("")
   }
 
   const toggleBought = (id: string) => {
-    setItems(items.map(item => 
-      item.id === id ? { ...item, bought: !item.bought } : item
-    ))
+    setItems(prev =>
+      prev.map(item => (item.id === id ? { ...item, bought: !item.bought } : item))
+    )
   }
 
   const removeItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id))
+    setItems(prev => prev.filter(item => item.id !== id))
   }
 
   return (
-    <Container>
-      <h1>🛒 Min Inköpslista</h1>
-      <InputRow>
-        <Input
-          type="text"
-          placeholder="Lägg till vara..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <AddButton onClick={handleAdd}>Lägg till</AddButton>
-      </InputRow>
+    <Page>
+      <Card>
+        <Header>
+          <Title>🛒 Min inköpslista</Title>
+          <SubTitle>
+            {stats.total === 0
+              ? "Lägg till första varan ✨"
+              : `${stats.left} kvar • ${stats.done} klara`}
+          </SubTitle>
+        </Header>
 
-      {items.map(item => (
-        <ShoppingItem
-          key={item.id}
-          item={item}
-          onToggle={toggleBought}
-          onRemove={removeItem}
-        />
-      ))}
-    </Container>
+        <InputRow onSubmit={handleAdd}>
+          <Input
+            type="text"
+            placeholder="Lägg till vara…"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            aria-label="Lägg till vara"
+          />
+          <AddButton type="submit" disabled={!input.trim()}>
+            Lägg till
+          </AddButton>
+        </InputRow>
+
+        {items.length === 0 ? (
+          <EmptyState>
+            <EmptyTitle>Tomt än så länge</EmptyTitle>
+            <EmptyText>Skriv något ovan och tryck Enter.</EmptyText>
+          </EmptyState>
+        ) : (
+          <List aria-label="Inköpslista">
+            {items.map(item => (
+              <ShoppingItem
+                key={item.id}
+                item={item}
+                onToggle={toggleBought}
+                onRemove={removeItem}
+              />
+            ))}
+          </List>
+        )}
+      </Card>
+    </Page>
   )
 }
 
 export default App
 
-const Container = styled.div`
-  max-width: 500px;
-  margin: 2rem auto;
-  padding: 1.5rem;
-  background: #FFF0F5;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-
-  @media (max-width: 600px) {
-    margin: 1rem;
-    padding: 1rem;
-  }
-
-  h1 {
-    text-align: center;
-    color: #5D1049;
-    margin-bottom: 1.5rem;
-  }
+const Page = styled.div`
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px 16px;
 `
 
-const InputRow = styled.div`
-  display: flex;
+const Card = styled.div`
+  width: min(560px, 100%);
+  padding: 22px;
+  border-radius: 18px;
+
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(93, 16, 73, 0.12);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(14px);
+`
+
+const Header = styled.div`
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+  text-align: center;
+`
+
+const Title = styled.h1`
+  font-size: 20px;
+  letter-spacing: 0.2px;
+  color: #3f0b31;
+`
+
+const SubTitle = styled.p`
+  font-size: 13px;
+  color: rgba(63, 11, 49, 0.72);
+`
+
+const InputRow = styled.form`
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 10px;
-  margin-bottom: 1rem;
+  margin-bottom: 14px;
 `
 
 const Input = styled.input`
-  flex: 1;
-  padding: 0.6rem;
-  border: 2px solid #FFD700;
-  border-radius: 10px;
-  font-size: 1rem;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(93, 16, 73, 0.18);
+  background: rgba(255, 255, 255, 0.75);
+  color: #3f0b31;
+  font-size: 14px;
+
+  &::placeholder {
+    color: rgba(63, 11, 49, 0.55);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: rgba(255, 105, 180, 0.6);
+    box-shadow: 0 0 0 4px rgba(255, 105, 180, 0.18);
+  }
 `
 
 const AddButton = styled.button`
-  background: #FFB6C1;
-  color: #5D1049;
-  font-weight: bold;
-  padding: 0.6rem 1rem;
-  border: none;
-  border-radius: 10px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 105, 180, 0.35);
+  background: linear-gradient(180deg, rgba(255, 105, 180, 0.95), rgba(255, 105, 180, 0.75));
+  color: #2b0822;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: transform 0.08s ease, filter 0.2s ease, opacity 0.2s ease;
 
-  &:hover {
-    background: #FF69B4;
+  &:hover { filter: brightness(1.03); }
+  &:active { transform: translateY(1px); }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
+`
+
+const List = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: grid;
+  gap: 10px;
+`
+
+const EmptyState = styled.div`
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(93, 16, 73, 0.22);
+  background: rgba(255, 255, 255, 0.45);
+  text-align: center;
+`
+
+const EmptyTitle = styled.div`
+  font-weight: 700;
+  color: #3f0b31;
+`
+
+const EmptyText = styled.div`
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(63, 11, 49, 0.7);
 `
